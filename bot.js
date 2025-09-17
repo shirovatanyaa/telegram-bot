@@ -179,7 +179,7 @@ async function initializeSheets() {
       }
     });
 
-    // Пробный период
+    // Пробный период - ДОБАВЛЯЕМ ЗАГОЛОВКИ
     await sheets.spreadsheets.values.update({
       spreadsheetId,
       range: 'Пробный период!A1:G1',
