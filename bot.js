@@ -53,8 +53,8 @@ const REPORT_TYPES = {
 const MAIN_QUESTIONS = [
   { id: 'tutor', text: '📝 Ваше имя (репетитор, только буквы):' },
   { id: 'date', text: '📅 Дата проведения занятий в формате ДД.ММ.ГГГГ (например, 25.12.2023):' },
-  { id: 'chat', text: '💬 Номер чата:' },
-  { id: 'parent', text: '👨‍👩‍👧‍👦 Имя родителя (только буквы):' },
+  { id: 'chat', text: '💬 Номер рабочего чата:' },
+  { id: 'parent', text: '👨‍👩‍👧‍👦 Имя родителя (только буквы, если нет - поставьте прочерк "-"):' },
   { id: 'student', text: '🎓 Имя ученика (только буквы):' },
   { id: 'amount', text: '💰 Сумма за занятие (в рублях, только цифры без пробелов и запятых):' }
 ];
@@ -62,9 +62,11 @@ const MAIN_QUESTIONS = [
 // Вопросы для пробного периода
 const TRIAL_QUESTIONS = [
   { id: 'tutor', text: '📝 Ваше имя (репетитор, только буквы):' },
-  { id: 'parent', text: '👨‍👩‍👧‍👦 Имя родителя (только буквы):' },
+  { id: 'date', text: '📅 Дата проведения занятий в формате ДД.ММ.ГГГГ (например, 25.12.2023):' },
+  { id: 'chat', text: '💬 Номер рабочего чата:' },
+  { id: 'parent', text: '👨‍👩‍👧‍👦 Имя родителя (только буквы, если нет - поставьте прочерк "-"):' },
   { id: 'student', text: '🎓 Имя ученика (только буквы):' },
-  { id: 'amount_commission', text: '💰 Сумма за занятие и комиссия профи в формате "сумма/комиссия" (например: 1500/500):' }
+  { id: 'amount', text: '💰 Сумма за занятие (в рублях, только цифры без пробелов и запятых):' }
 ];
 
 // Функция для расчета выплаты (70% от суммы)
@@ -74,29 +76,19 @@ function calculatePayment(amount) {
   return Math.round(numericAmount * 0.7);
 }
 
-// Валидация имени (только буквы и пробелы)
+// Валидация имени (только буквы, пробелы и прочерк)
 function validateName(name) {
-  const nameRegex = /^[a-zA-Zа-яА-ЯёЁ\s]+$/;
+  const nameRegex = /^[a-zA-Zа-яА-ЯёЁ\s\-]+$/;
   return nameRegex.test(name);
 }
 
-// Валидация суммы и комиссии
-function validateAmountCommission(input) {
-  // Убираем возможные пробелы
-  const cleanedInput = input.replace(/\s/g, '');
-  
-  // Проверяем формат: цифры/цифры
-  const regex = /^\d+\/\d+$/;
-  if (!regex.test(cleanedInput)) return false;
-  
-  // Разделяем и проверяем числа
-  const [amount, commission] = cleanedInput.split('/').map(Number);
-  
-  // Проверяем что это числа и amount > 0, commission >= 0
-  return !isNaN(amount) && !isNaN(commission) && amount > 0 && commission >= 0;
+// Валидация суммы
+function validateAmount(input) {
+  const numbersOnly = /^\d+$/;
+  return numbersOnly.test(input) && parseInt(input) > 0;
 }
 
-// Запись данных в основной отчет (на первый лист)
+// Запись данных в основной отчет
 async function writeToMainSheet(userData, userId, username) {
   try {
     const payment = calculatePayment(userData.amount);
@@ -108,7 +100,7 @@ async function writeToMainSheet(userData, userId, username) {
 
     const response = await sheets.spreadsheets.values.append({
       spreadsheetId,
-      range: 'A:H', // Просто колонки на первом листе
+      range: 'Основной отчет!A:G',
       valueInputOption: 'USER_ENTERED',
       resource: {
         values: [[
@@ -118,27 +110,23 @@ async function writeToMainSheet(userData, userId, username) {
           userData.chat,
           userData.parent,
           userData.student,
-          userData.amount,
-          payment
+          userData.amount
         ]]
       }
     });
 
-    log(`✅ Данные записаны: ${userData.student}`);
+    log(`✅ Данные записаны в Основной отчет: ${userData.student}`);
     return true;
 
   } catch (error) {
-    log('Ошибка записи:' + error.message);
+    log('Ошибка записи в Основной отчет:' + error.message);
     return false;
   }
 }
 
-// Запись данных в пробный период (на первый лист)
+// Запись данных в пробный период
 async function writeToTrialSheet(userData, userId, username) {
   try {
-    const [amount, commission] = userData.amount_commission.split('/').map(Number);
-    const balance = amount - commission;
-    
     let userIdentifier = username || `user_${userId}`;
     if (!userIdentifier.startsWith('@') && userIdentifier !== `user_${userId}`) {
       userIdentifier = '@' + userIdentifier;
@@ -146,26 +134,72 @@ async function writeToTrialSheet(userData, userId, username) {
 
     const response = await sheets.spreadsheets.values.append({
       spreadsheetId,
-      range: 'A:F', // Просто колонки на первом листе
+      range: 'Пробный период!A:G',
       valueInputOption: 'USER_ENTERED',
       resource: {
         values: [[
           userIdentifier,
           userData.tutor,
+          userData.date,
+          userData.chat,
           userData.parent,
           userData.student,
-          userData.amount_commission,
-          balance
+          userData.amount
         ]]
       }
     });
 
-    log(`✅ Данные пробного периода записаны: ${userData.student}`);
+    log(`✅ Данные записаны в Пробный период: ${userData.student}`);
     return true;
 
   } catch (error) {
-    log('Ошибка записи пробного периода:' + error.message);
+    log('Ошибка записи в Пробный период:' + error.message);
     return false;
+  }
+}
+
+// Инициализация таблиц
+async function initializeSheets() {
+  try {
+    // Основной отчет
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: 'Основной отчет!A1:G1',
+      valueInputOption: 'USER_ENTERED',
+      resource: {
+        values: [[
+          'Телеграмм',
+          'Репетитор',
+          'Дата',
+          'Чат',
+          'Родитель',
+          'Ученик',
+          'Сумма'
+        ]]
+      }
+    });
+
+    // Пробный период
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: 'Пробный период!A1:G1',
+      valueInputOption: 'USER_ENTERED',
+      resource: {
+        values: [[
+          'Телеграмм',
+          'Репетитор',
+          'Дата',
+          'Чат',
+          'Родитель',
+          'Ученик',
+          'Сумма'
+        ]]
+      }
+    });
+
+    log('✅ Таблицы инициализированы');
+  } catch (error) {
+    log('Ошибка инициализации таблиц:' + error.message);
   }
 }
 
@@ -199,21 +233,14 @@ async function saveUserData(chatId) {
     if (success) {
       let summaryMessage = `✅ Все данные успешно сохранены!\n\n📊 Сводка:\n`;
       
-      if (userState.reportType === REPORT_TYPES.MAIN) {
-        summaryMessage += `• Репетитор: ${userState.answers.tutor}\n`;
-        summaryMessage += `• Дата: ${userState.answers.date}\n`;
-        summaryMessage += `• Чат: ${userState.answers.chat}\n`;
-        summaryMessage += `• Родитель: ${userState.answers.parent}\n`;
-        summaryMessage += `• Ученик: ${userState.answers.student}\n`;
-        summaryMessage += `• Сумма: ${userState.answers.amount} руб.`;
-      } else {
-        summaryMessage += `• Репетитор: ${userState.answers.tutor}\n`;
-        summaryMessage += `• Родитель: ${userState.answers.parent}\n`;
-        summaryMessage += `• Ученик: ${userState.answers.student}\n`;
-        summaryMessage += `• Сумма/Комиссия: ${userState.answers.amount_commission}`;
-      }
+      summaryMessage += `• Репетитор: ${userState.answers.tutor}\n`;
+      summaryMessage += `• Дата: ${userState.answers.date}\n`;
+      summaryMessage += `• Чат: ${userState.answers.chat}\n`;
+      summaryMessage += `• Родитель: ${userState.answers.parent}\n`;
+      summaryMessage += `• Ученик: ${userState.answers.student}\n`;
+      summaryMessage += `• Сумма: ${userState.answers.amount} руб.\n`;
       
-      summaryMessage += `\n\nДля нового заполнения отправьте /start`;
+      summaryMessage += `\nДля нового заполнения отправьте /start`;
       
       bot.sendMessage(chatId, summaryMessage);
     } else {
@@ -240,7 +267,7 @@ bot.onText(/\/start/, (msg) => {
     }
   };
   
-  const welcomeMessage = '👋 Добро пожаловать! Выберите тип отчета:\n\n📊 *Основной отчет* - полная отчетность по занятиям\n🆓 *Пробный период* - учет пробных занятий с комиссией';
+  const welcomeMessage = '👋 Добро пожаловать! Выберите тип отчета:\n\n📊 *Основной отчет* - полная отчетность по занятиям\n🆓 *Пробный период* - учет пробных занятий';
   
   bot.sendMessage(chatId, welcomeMessage, { parse_mode: 'Markdown', ...options });
 });
@@ -287,9 +314,11 @@ function startTrialReport(chatId, user) {
     reportType: REPORT_TYPES.TRIAL,
     answers: {
       tutor: '',
+      date: '',
+      chat: '',
       parent: '',
       student: '',
-      amount_commission: ''
+      amount: ''
     }
   });
   
@@ -329,7 +358,7 @@ bot.on('message', async (msg) => {
     case 'student':
       if (!validateName(text)) {
         isValid = false;
-        errorMessage = '❌ Неверный формат! Можно вводить только буквы и пробелы.';
+        errorMessage = '❌ Неверный формат! Можно вводить только буквы, пробелы и прочерк "-".';
       }
       break;
       
@@ -342,34 +371,10 @@ bot.on('message', async (msg) => {
       break;
       
     case 'amount':
-      const numbersOnly = /^\d+$/;
-      if (!numbersOnly.test(text)) {
+      if (!validateAmount(text)) {
         isValid = false;
         errorMessage = '❌ Неверный формат суммы! Введите только цифры без пробелов, запятых и текста.\n\nПример: 1500';
-      } else {
-        const amount = parseInt(text);
-        if (isNaN(amount) || amount <= 0) {
-          isValid = false;
-          errorMessage = '❌ Сумма должна быть положительным числом';
-        }
       }
-      break;
-      
-    case 'amount_commission':
-      // Убираем пробелы из ввода
-      const cleanedInput = text.replace(/\s/g, '');
-      
-      if (!validateAmountCommission(cleanedInput)) {
-        isValid = false;
-        errorMessage = '❌ Неверный формат! Используйте формат "сумма/комиссия" (например: 1500/500)\n\n• Только цифры и слэш\n• Без пробелов\n• Комиссия не может быть отрицательной';
-      } else {
-        // Сохраняем очищенный ввод
-        userState.answers[currentQuestion.id] = cleanedInput;
-      }
-      break;
-      
-    default:
-      userState.answers[currentQuestion.id] = text;
       break;
   }
   
@@ -378,11 +383,7 @@ bot.on('message', async (msg) => {
     return;
   }
   
-  // Для всех полей кроме amount_commission сохраняем оригинальный текст
-  if (currentQuestion.id !== 'amount_commission') {
-    userState.answers[currentQuestion.id] = text;
-  }
-  
+  userState.answers[currentQuestion.id] = text;
   userState.currentQuestion++;
   
   if (userState.currentQuestion < questions.length) {
@@ -408,6 +409,11 @@ bot.onText(/\/cancel/, (msg) => {
   }
 });
 
+// Инициализация при запуске
+initializeSheets().then(() => {
+  log('🤖 Бот запущен и готов к работе...');
+});
+
 // Обработчик ошибок
 bot.on('polling_error', (error) => {
   log('Polling error:' + error.message);
@@ -429,5 +435,3 @@ process.on('unhandledRejection', (reason, promise) => {
     process.exit(1);
   }, 3000);
 });
-
-log('🤖 Бот запущен и готов к работе...');
