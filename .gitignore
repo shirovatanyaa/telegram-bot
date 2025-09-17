@@ -9,3 +9,10 @@ yarn-error.log*
 .nyc_output
 coverage/
 .DS_Store
+# Защищенные файлы
+*.json
+*.key
+*.pem
+.env
+credentials/
+secrets/
